@@ -12,6 +12,7 @@ export default function FAScreen() {
   const userFinishFA = useStore(s => s.userFinishFA)
   const [filter, setFilter] = useState<'all' | 'bat' | 'pit'>('all')
 
+  const setViewPlayer = useStore(s => s.setViewPlayer)
   const team = league.teams[league.userTeam]
   const payroll = teamPayroll(league, league.userTeam)
   const pool = league.faPool
@@ -46,7 +47,7 @@ export default function FAScreen() {
                 const afford = payroll + ask.salary * 12 <= team.budget
                 return (
                   <tr key={p.id}>
-                    <td>{p.name}{p.foreign ? <span className="foreign-tag">洋</span> : ''}</td>
+                    <td><span className="pname-link" onClick={() => setViewPlayer(p.id)}>{p.name}{p.foreign ? <span className="foreign-tag">洋</span> : ''}</span></td>
                     <td>{p.pos}</td>
                     <td className="num">{p.age}</td>
                     <td><OvrBadge v={ovr(p)} /></td>

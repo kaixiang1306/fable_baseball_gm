@@ -26,6 +26,7 @@ export default function MainShell() {
   const tab = useStore(s => s.tab)
   const setTab = useStore(s => s.setTab)
   const setScreen = useStore(s => s.setScreen)
+  const exportSave = useStore(s => s.exportSave)
 
   const team = league.teams[league.userTeam]
   const rec = team.rec
@@ -50,6 +51,7 @@ export default function MainShell() {
           <span>士氣 <b>{team.morale}</b></span>
           <span>年薪資 <b>{fmtMoney(teamPayroll(league, team.id))}</b> / {fmtMoney(team.budget)}</span>
           <span><b>{dateLabel}</b> {halfLabel}</span>
+          <button className="ghost" style={{ padding: '2px 10px', fontSize: 12 }} onClick={exportSave} title="下載聯盟存檔 JSON，可分享給其他玩家匯入">匯出存檔</button>
           <button className="ghost" style={{ padding: '2px 10px', fontSize: 12 }} onClick={() => setScreen('title')}>主選單</button>
         </span>
       </div>

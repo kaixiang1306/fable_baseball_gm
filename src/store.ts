@@ -9,7 +9,25 @@ import { startOffseason, finishFA, signFA, draftPickPlayer, runAIDraftPicks } fr
 import { evaluateTrade, executeTrade, type TradeVerdict } from './engine/trade'
 import { offerExtension, type NegoResult } from './engine/contracts'
 
-const SAVE_KEY = 'fable-gm-save-v2'
+const SAVE_KEY = 'fable-gm-save-v3'
+
+/** 舊版存檔補欄位（升級保險） */
+function migrateLeague(L: League): League {
+  for (const p of Object.values(L.players)) {
+    p.seasonHistory ??= []
+    p.morale ??= 55
+    p.injuryDays ??= 0
+    p.negoFails ??= 0
+    for (const b of [p.bat, p.fbat, p.career?.bat].filter(Boolean)) (b as { e: number }).e ??= 0
+  }
+  L.history ??= []
+  L.hallOfFame ??= []
+  L.allStar ??= null
+  for (const t of L.teams) {
+    t.farmRec ??= { w: 0, l: 0, t: 0 }
+  }
+  return L
+}
 
 export type Screen = 'title' | 'select' | 'main'
 export type MainTab = 'calendar' | 'roster' | 'standings' | 'leaders' | 'trade' | 'finance' | 'history'
@@ -28,6 +46,13 @@ interface Store {
   tick: number
   watch: WatchState | null
   hasSave: boolean
+  viewPlayer: number | null
+  importPending: League | null
+  setViewPlayer: (id: number | null) => void
+  exportSave: () => void
+  importSave: (file: File) => Promise<string | null>
+  confirmImport: (teamId: number) => void
+  cancelImport: () => void
 
   newGame: (teamId: number) => void
   adoptLeague: (league: League, teamId: number) => void
@@ -58,8 +83,15 @@ export function loadSavedLeague(): League | null {
   try {
     const raw = localStorage.getItem(SAVE_KEY)
     if (!raw) return null
-    return JSON.parse(raw) as League
+    return migrateLeague(JSON.parse(raw) as League)
   } catch { return null }
+}
+
+function validLeague(L: unknown): L is League {
+  const x = L as League
+  return !!x && Array.isArray(x.teams) && x.teams.length === 6 &&
+    typeof x.players === 'object' && Array.isArray(x.schedule) &&
+    typeof x.year === 'number' && typeof x.userTeam === 'number'
 }
 
 export const useStore = create<Store>((set, get) => ({
@@ -69,6 +101,39 @@ export const useStore = create<Store>((set, get) => ({
   tick: 0,
   watch: null,
   hasSave: !!loadSavedLeague(),
+  viewPlayer: null,
+  importPending: null,
+  setViewPlayer: (id) => set({ viewPlayer: id }),
+  exportSave: () => {
+    const L = get().league
+    if (!L) return
+    const blob = new Blob([JSON.stringify(L)], { type: 'application/json' })
+    const a = document.createElement('a')
+    a.href = URL.createObjectURL(blob)
+    a.download = `寶島職棒GM_${L.year}年_${L.teams[L.userTeam].name}.json`
+    a.click()
+    URL.revokeObjectURL(a.href)
+  },
+  importSave: async (file) => {
+    try {
+      const text = await file.text()
+      const parsed = JSON.parse(text)
+      if (!validLeague(parsed)) return '檔案格式不正確，這不是寶島職棒 GM 的存檔。'
+      set({ importPending: migrateLeague(parsed) })
+      return null
+    } catch {
+      return '無法讀取檔案，請確認是有效的 JSON 存檔。'
+    }
+  },
+  confirmImport: (teamId) => {
+    const L = get().importPending
+    if (!L) return
+    L.userTeam = teamId
+    setNextPlayerId(L.nextPlayerId)
+    save(L)
+    set({ league: L, importPending: null, screen: 'main', tab: 'calendar', hasSave: true, tick: get().tick + 1 })
+  },
+  cancelImport: () => set({ importPending: null }),
 
   newGame: (teamId) => {
     const league = createLeague(teamId)

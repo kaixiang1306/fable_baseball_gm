@@ -7,12 +7,14 @@ import SeasonEnd from './ui/SeasonEnd'
 import FAScreen from './ui/FAScreen'
 import DraftScreen from './ui/DraftScreen'
 import GameOver from './ui/GameOver'
+import PlayerCard from './ui/PlayerCard'
 
 export default function App() {
   const screen = useStore(s => s.screen)
   const tick = useStore(s => s.tick)
   const league = useStore(s => s.league)
   const watch = useStore(s => s.watch)
+  const viewPlayer = useStore(s => s.viewPlayer)
   void tick
 
   let body: JSX.Element
@@ -28,6 +30,7 @@ export default function App() {
     <div className="app">
       {body}
       {watch && <WatchGame />}
+      {viewPlayer != null && league && <PlayerCard />}
     </div>
   )
 }

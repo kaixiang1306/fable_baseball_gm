@@ -1,5 +1,6 @@
-import type { BatStats, Game, League, PBEvent, PitStats, Player, Team } from '../types'
+import type { BatStats, Game, League, PBEvent, PitStats, Player, Pos, Team } from '../types'
 import { emptyBat, emptyPit, ovr } from './playerGen'
+import { effField } from './positions'
 import { clamp, rand, randInt } from './util'
 
 export const MAX_INN = 12 // 延長賽至 12 局，平手和局
@@ -28,16 +29,32 @@ interface SideRT {
   usedPitchers: Set<number>
   subbedOut: Set<number>  // 已被換下、不能再上場
   defense: number
+  effAvg: number          // 平均有效守備值（失誤率用）
 }
 
-interface Runner { player: Player; respPitcher: Player }
+interface Runner { player: Player; respPitcher: Player; roe?: boolean }
 
 const FIELD_DIR = ['左外野', '中外野', '右外野', '三壘', '游擊', '二壘', '一壘']
+const IF_SLOTS: Pos[] = ['1B', '2B', '3B', 'SS', 'C']
+const OF_SLOTS: Pos[] = ['LF', 'CF', 'RF']
+
+/** 各守位有效守備值（含位置適性折扣） */
+function fielderEffs(lineup: Player[], lineupPos: string[]): { p: Player; slot: Pos; eff: number }[] {
+  return lineup
+    .map((p, i) => ({ p, slot: (lineupPos[i] ?? p.pos) as Pos }))
+    .filter(x => x.slot !== 'DH')
+    .map(x => ({ ...x, eff: effField(x.p.field, x.p.pos, x.slot) }))
+}
 
 function defenseOf(lineup: Player[], lineupPos: string[]): number {
-  const fielders = lineup.filter((p, i) => (lineupPos[i] ?? p.pos) !== 'DH')
-  const f = fielders.reduce((s, p) => s + p.field, 0) / Math.max(1, fielders.length)
+  const effs = fielderEffs(lineup, lineupPos)
+  const f = effs.reduce((s, x) => s + x.eff, 0) / Math.max(1, effs.length)
   return (f - 50) / 1800
+}
+
+function effAvgOf(lineup: Player[], lineupPos: string[]): number {
+  const effs = fielderEffs(lineup, lineupPos)
+  return effs.reduce((s, x) => s + x.eff, 0) / Math.max(1, effs.length)
 }
 
 function pitchLimit(p: Player): number {
@@ -146,6 +163,7 @@ export class LiveGame {
       usedPitchers: new Set([squad.startPitcher.id]),
       subbedOut: new Set(),
       defense: defenseOf(squad.lineup, squad.lineupPos),
+      effAvg: effAvgOf(squad.lineup, squad.lineupPos),
     })
     this.H = mk(home)
     this.A = mk(away)
@@ -199,7 +217,36 @@ export class LiveGame {
     side.subbedOut.add(out.id)
     side.lineup[idx] = sub
     side.defense = defenseOf(side.lineup, side.squad.lineupPos)
+    side.effAvg = effAvgOf(side.lineup, side.squad.lineupPos)
     this.push(`代打！${side.squad.name} 換上 ${sub.name} 代打，換下 ${out.name}。`, false, sub.name)
+  }
+
+  /** 目前防守方投手狀態（轉播顯示用） */
+  pitcherInfo(): { name: string; pitches: number; limit: number; tired: boolean } {
+    const p = this.def().pitcher
+    const limit = Math.round(pitchLimit(p))
+    return { name: p.name, pitches: Math.round(this.def().pitches), limit, tired: this.def().pitches > limit }
+  }
+
+  /** 使用者可用的後援投手 */
+  availableRelievers(): Player[] {
+    if (!this.isUserDefense() || this.done) return []
+    const def = this.def()
+    const pool = [...def.squad.bullpen, ...(def.squad.closer ? [def.squad.closer] : [])]
+    return pool.filter(p => p.injuryDays === 0 && !def.usedPitchers.has(p.id) && p.id !== def.pitcher.id)
+  }
+
+  /** 使用者手動換投 */
+  manualChangePitcher(sub: Player) {
+    if (!this.isUserDefense() || this.done) return
+    const def = this.def()
+    if (def.usedPitchers.has(sub.id)) return
+    def.pitcher = sub
+    def.pitches = 0
+    def.pitcherRuns = 0
+    def.usedPitchers.add(sub.id)
+    this.ps(sub).g++
+    this.push(`總教練走上投手丘——${def.squad.name} 換投，由 ${sub.name} 接替投球。`, false)
   }
 
   private push(text: string, big: boolean, batter = '') {
@@ -216,7 +263,8 @@ export class LiveGame {
     this.bs(r.player).r++
     if (rbiTo) this.bs(rbiTo).rbi++
     const rp = this.ps(r.respPitcher)
-    rp.r++; rp.er++
+    rp.r++
+    if (!r.roe) rp.er++ // 因失誤上壘的跑者得分為非自責分
     this.def().pitcherRuns++
     const newLead: 'H' | 'A' | null = this.hs > this.as ? 'H' : this.as > this.hs ? 'A' : null
     if (newLead && newLead !== this.leadTeam) {
@@ -407,7 +455,7 @@ export class LiveGame {
       return
     }
 
-    const babip = clamp(0.298 + (batter.contact - 50) / 580 + (batter.speed - 50) / 2400 - def.defense + bMor + homeAdv, 0.21, 0.40)
+    const babip = clamp(0.294 + (batter.contact - 50) / 580 + (batter.speed - 50) / 2400 - def.defense + bMor + homeAdv, 0.21, 0.40)
     if (rand() < babip) {
       b.ab++; b.h++
       this.ps(p).h++
@@ -424,9 +472,12 @@ export class LiveGame {
       return
     }
 
-    // 出局
+    // 出局（或守備失誤）
     b.ab++
+    const errBase = clamp(0.032 - (def.effAvg - 50) / 1500, 0.006, 0.075)
     if (rand() < 0.46) {
+      // 滾地球：失誤機率較高
+      if (rand() < errBase * 1.2) { this.fieldingError(batter, p, true); return }
       if (this.bases[0] && this.outs < 2 && rand() < 0.37) {
         const pst = this.ps(p); pst.outs += 2
         this.outs += 2
@@ -439,6 +490,7 @@ export class LiveGame {
       const dir = FIELD_DIR[randInt(3, 6)]
       this.push(`${batter.name} 擊出${dir}方向滾地球出局。${this.outs} 出局。`, false, batter.name)
     } else {
+      if (rand() < errBase * 0.7) { this.fieldingError(batter, p, false); return }
       this.ps(p).outs++
       this.outs++
       let sacText = ''
@@ -451,6 +503,34 @@ export class LiveGame {
       const dir = FIELD_DIR[randInt(0, 2)]
       this.push(`${batter.name} 擊出${dir}方向飛球出局。${this.outs} 出局。${sacText}`, sacText !== '', batter.name)
     }
+  }
+
+  /** 守備失誤：打者上一壘、跑者各推進一個壘包，失誤記給守備員 */
+  private fieldingError(batter: Player, pit: Player, ground: boolean) {
+    const def = this.def()
+    const effs = fielderEffs(def.lineup, def.squad.lineupPos)
+      .filter(x => (ground ? IF_SLOTS : OF_SLOTS).includes(x.slot))
+    // 守備越差越容易被記失誤
+    const pool = effs.length ? effs : fielderEffs(def.lineup, def.squad.lineupPos)
+    const weights = pool.map(x => Math.max(5, 105 - x.eff))
+    let pick = rand() * weights.reduce((a, b) => a + b, 0)
+    let fielder = pool[0]
+    for (let i = 0; i < pool.length; i++) {
+      pick -= weights[i]
+      if (pick <= 0) { fielder = pool[i]; break }
+    }
+    this.bs(fielder.p).e++
+
+    // 跑者各推進一個壘包（三壘跑者得分，非自責）
+    if (this.bases[2]) {
+      const r3 = this.bases[2]; this.bases[2] = null
+      this.scoreRunner(r3!, null)
+    }
+    if (this.bases[1]) { this.bases[2] = this.bases[1]; this.bases[1] = null }
+    if (this.bases[0]) { this.bases[1] = this.bases[0]; this.bases[0] = null }
+    this.bases[0] = { player: batter, respPitcher: pit, roe: true }
+    const slotName: Record<string, string> = { '1B': '一壘手', '2B': '二壘手', '3B': '三壘手', SS: '游擊手', C: '捕手', LF: '左外野手', CF: '中外野手', RF: '右外野手' }
+    this.push(`守備失誤！${slotName[fielder.slot] ?? '野手'} ${fielder.p.name} ${ground ? '漏接滾地球' : '掉了飛球'}，${batter.name} 上壘。`, false, batter.name)
   }
 
   private advanceWalk(batter: Player, pit: Player) {

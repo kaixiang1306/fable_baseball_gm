@@ -37,11 +37,19 @@ export function startOffseason(L: League) {
   const retired: string[] = []
   L.faPool = []
 
-  // 本季數據累計入生涯
+  // 本季數據累計入生涯＋逐季封存
   for (const p of Object.values(L.players)) {
     if (p.bat.pa > 0 || p.pit.g > 0) p.career.seasons++
     addBat(p.career.bat, p.bat)
     addPit(p.career.pit, p.pit)
+    const line: import('../types').SeasonLine = {
+      y: L.year,
+      t: p.teamId >= 0 ? L.teams[p.teamId].short : 'FA',
+      o: ovr(p),
+    }
+    if (p.bat.pa > 0) line.bat = { pa: p.bat.pa, ab: p.bat.ab, h: p.bat.h, hr: p.bat.hr, rbi: p.bat.rbi, sb: p.bat.sb }
+    if (p.pit.g > 0) line.pit = { outs: p.pit.outs, er: p.pit.er, w: p.pit.w, l: p.pit.l, sv: p.pit.sv, so: p.pit.so }
+    p.seasonHistory.push(line)
   }
 
   for (const p of Object.values(L.players)) {

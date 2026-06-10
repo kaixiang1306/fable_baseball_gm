@@ -7,10 +7,16 @@ import { TRADE_DEADLINE_DAY } from '../engine/league'
 import { OvrBadge } from './bits'
 
 function PlayerRow({ p, picked, onToggle }: { p: Player; picked: boolean; onToggle: () => void }) {
+  const setViewPlayer = useStore(s => s.setViewPlayer)
   return (
     <tr className={picked ? 'hl' : ''} onClick={onToggle} style={{ cursor: 'pointer' }}>
       <td><input type="checkbox" checked={picked} readOnly /></td>
-      <td>{p.name}{p.foreign ? <span className="foreign-tag">洋</span> : ''}</td>
+      <td>
+        <span className="pname-link" onClick={e => { e.stopPropagation(); setViewPlayer(p.id) }}>
+          {p.name}{p.foreign ? <span className="foreign-tag">洋</span> : ''}
+        </span>
+        {p.injuryDays > 0 && <span className="injury-tag">傷{p.injuryDays}</span>}
+      </td>
       <td>{p.pos}</td>
       <td className="num">{p.age}</td>
       <td><OvrBadge v={ovr(p)} /></td>

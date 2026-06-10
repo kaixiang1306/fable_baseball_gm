@@ -10,6 +10,7 @@ export default function WatchGame() {
   const [speed, setSpeed] = useState(800)
   const [paused, setPaused] = useState(false)
   const [showBench, setShowBench] = useState(false)
+  const [showPen, setShowPen] = useState(false)
   const logRef = useRef<HTMLDivElement>(null)
 
   const rerender = () => force(x => x + 1)
@@ -33,6 +34,8 @@ export default function WatchGame() {
   const userDef = !lg.done && lg.isUserDefense()
   const next = lg.done ? null : lg.nextBatter()
   const bench = userOff && showBench ? lg.benchFor() : []
+  const pen = userDef && showPen ? lg.availableRelievers() : []
+  const pInfo = lg.done ? null : lg.pitcherInfo()
 
   const skipToEnd = () => {
     let guard = 0
@@ -71,6 +74,13 @@ export default function WatchGame() {
             <span className="muted">下一棒：</span>
             <b>{next.name}</b>
             <span className="muted">({ovr(next)})</span>
+            {pInfo && (
+              <span className="muted" style={{ marginLeft: 6 }}>
+                投手 {pInfo.name}
+                <b style={{ color: pInfo.tired ? 'var(--red2)' : 'var(--txt)', marginLeft: 4 }}>{pInfo.pitches} 球</b>
+                {pInfo.tired && <span className="red">（已疲勞）</span>}
+              </span>
+            )}
             {(userOff || userDef) && <span className="gold" style={{ marginLeft: 6 }}>⚾ 臨場指揮</span>}
             {userOff && (
               <>
@@ -86,14 +96,17 @@ export default function WatchGame() {
               </>
             )}
             {userDef && (
-              <button
-                className={lg.pendingIBB ? 'primary' : ''}
-                disabled={!lg.canIBB() && !lg.pendingIBB}
-                onClick={() => { lg.pendingIBB = !lg.pendingIBB; rerender() }}
-                title="一壘無人且得點圈有人時可下達"
-              >
-                {lg.pendingIBB ? '✓ 敬遠' : '敬遠'}
-              </button>
+              <>
+                <button
+                  className={lg.pendingIBB ? 'primary' : ''}
+                  disabled={!lg.canIBB() && !lg.pendingIBB}
+                  onClick={() => { lg.pendingIBB = !lg.pendingIBB; rerender() }}
+                  title="一壘無人且得點圈有人時可下達"
+                >
+                  {lg.pendingIBB ? '✓ 敬遠' : '敬遠'}
+                </button>
+                <button onClick={() => setShowPen(s => !s)}>換投…</button>
+              </>
             )}
           </div>
         )}
@@ -107,6 +120,18 @@ export default function WatchGame() {
               </button>
             ))}
             <button className="ghost" onClick={() => setShowBench(false)}>取消</button>
+          </div>
+        )}
+
+        {showPen && userDef && (
+          <div className="bench-pop">
+            {pen.length === 0 && <span className="muted">牛棚已無可用投手。</span>}
+            {pen.map(p => (
+              <button key={p.id} onClick={() => { lg.manualChangePitcher(p); setShowPen(false); rerender() }}>
+                {p.name} {p.pos}/{ovr(p)}（球威{p.stuff}/控球{p.ctrl}）
+              </button>
+            ))}
+            <button className="ghost" onClick={() => setShowPen(false)}>取消</button>
           </div>
         )}
 

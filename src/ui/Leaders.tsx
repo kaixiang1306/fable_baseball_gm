@@ -6,6 +6,7 @@ interface Board { title: string; rows: { p: Player; v: string }[] }
 
 export default function Leaders() {
   const league = useStore(s => s.league)!
+  const setViewPlayer = useStore(s => s.setViewPlayer)
   const players = Object.values(league.players).filter(p => p.teamId >= 0)
   const teamGames = Math.max(1, ...league.teams.map(t => t.rec[0].w + t.rec[0].l + t.rec[0].t + t.rec[1].w + t.rec[1].l + t.rec[1].t))
 
@@ -37,7 +38,7 @@ export default function Leaders() {
                 {b.rows.map(({ p, v }, i) => (
                   <tr key={p.id} className={p.teamId === league.userTeam ? 'hl' : ''}>
                     <td style={{ width: 24 }}><b>{i + 1}</b></td>
-                    <td>{p.name}{p.foreign ? <span className="foreign-tag">洋</span> : ''}</td>
+                    <td><span className="pname-link" onClick={() => setViewPlayer(p.id)}>{p.name}{p.foreign ? <span className="foreign-tag">洋</span> : ''}</span></td>
                     <td className="muted">{league.teams[p.teamId]?.short}</td>
                     <td className="num"><b>{v}</b></td>
                   </tr>

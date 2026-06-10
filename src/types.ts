@@ -4,6 +4,16 @@ export type PitRole = 'SP' | 'RP' | 'CP'
 export interface BatStats {
   pa: number; ab: number; h: number; d2: number; d3: number; hr: number
   rbi: number; r: number; bb: number; so: number; sb: number; cs: number; hbp: number
+  e: number   // 守備失誤（記在野手身上）
+}
+
+/** 逐季封存（生涯曲線用） */
+export interface SeasonLine {
+  y: number   // 年度
+  t: string   // 球隊簡稱
+  o: number   // 當季結束時綜合能力
+  bat?: { pa: number; ab: number; h: number; hr: number; rbi: number; sb: number }
+  pit?: { outs: number; er: number; w: number; l: number; sv: number; so: number }
 }
 export interface PitStats {
   g: number; gs: number; outs: number; h: number; r: number; er: number
@@ -36,6 +46,7 @@ export interface Player {
   fbat: BatStats       // 二軍打擊數據
   fpit: PitStats       // 二軍投球數據
   career: CareerStats  // 一軍生涯累計
+  seasonHistory: SeasonLine[]  // 逐季紀錄
 }
 
 export interface OwnerPrefs {

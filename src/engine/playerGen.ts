@@ -2,7 +2,7 @@ import type { BatStats, PitRole, PitStats, Player, Pos } from '../types'
 import { genName, genForeignName } from '../data/names'
 import { clamp, genRating, randInt, rand } from './util'
 
-export const emptyBat = (): BatStats => ({ pa: 0, ab: 0, h: 0, d2: 0, d3: 0, hr: 0, rbi: 0, r: 0, bb: 0, so: 0, sb: 0, cs: 0, hbp: 0 })
+export const emptyBat = (): BatStats => ({ pa: 0, ab: 0, h: 0, d2: 0, d3: 0, hr: 0, rbi: 0, r: 0, bb: 0, so: 0, sb: 0, cs: 0, hbp: 0, e: 0 })
 export const emptyPit = (): PitStats => ({ g: 0, gs: 0, outs: 0, h: 0, r: 0, er: 0, bb: 0, so: 0, hr: 0, w: 0, l: 0, sv: 0 })
 
 /** 綜合能力值 */
@@ -43,6 +43,7 @@ function base(name: string, age: number, foreign: boolean): Player {
     bat: emptyBat(), pit: emptyPit(),
     fbat: emptyBat(), fpit: emptyPit(),
     career: { bat: emptyBat(), pit: emptyPit(), seasons: 0 },
+    seasonHistory: [],
   }
 }
 

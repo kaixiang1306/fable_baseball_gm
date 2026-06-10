@@ -6,6 +6,7 @@ import { OvrBadge } from './bits'
 export default function DraftScreen() {
   const league = useStore(s => s.league)!
   const userDraftPick = useStore(s => s.userDraftPick)
+  const setViewPlayer = useStore(s => s.setViewPlayer)
 
   const pickNo = league.draftPick
   const total = league.draftOrder.length
@@ -39,7 +40,7 @@ export default function DraftScreen() {
             <tbody>
               {pool.map(p => (
                 <tr key={p.id}>
-                  <td>{p.name}</td>
+                  <td><span className="pname-link" onClick={() => setViewPlayer(p.id)}>{p.name}</span></td>
                   <td>{p.isP ? '投手' : '野手'}</td>
                   <td>{p.pos}</td>
                   <td className="num">{p.age}</td>

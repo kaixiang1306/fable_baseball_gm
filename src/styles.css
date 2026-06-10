@@ -268,6 +268,13 @@ table.data tr.hl td { background: rgba(214, 54, 47, 0.12); }
   font-size: 10px; background: var(--red); border-radius: 2px; padding: 0 4px; margin-left: 5px;
   vertical-align: middle;
 }
+.player-card { width: min(780px, 94vw); max-height: 92vh; overflow: auto; }
+.rating-row { display: flex; align-items: center; gap: 8px; padding: 3px 0; font-size: 13px; }
+.rating-row .rlabel { width: 34px; color: var(--txt-dim); flex: none; }
+.rating-row .rbar { flex: 1; height: 9px; background: #11161d; border-radius: 5px; overflow: hidden; }
+.rating-row .rbar div { height: 100%; border-radius: 5px; }
+.pname-link { cursor: pointer; }
+.pname-link:hover { color: var(--red2); text-decoration: underline; }
 .hof-card {
   border-left: 3px solid var(--gold); padding: 8px 12px; margin-bottom: 8px;
   background: rgba(232, 185, 60, 0.05); line-height: 1.7;

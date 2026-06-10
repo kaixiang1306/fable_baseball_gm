@@ -4,16 +4,19 @@ import type { Player } from '../types'
 import { ovr } from '../engine/playerGen'
 import { MAIN_ROSTER_SIZE } from '../engine/league'
 import { extensionAsk, MAX_NEGO_FAILS, type NegoResult } from '../engine/contracts'
+import { posFactor } from '../engine/positions'
+import type { Pos } from '../types'
 import { avg, era, ip } from '../engine/util'
 import { Logo, OvrBadge } from './bits'
 
 function PName({ p }: { p: Player }) {
+  const setViewPlayer = useStore(s => s.setViewPlayer)
   return (
-    <>
+    <span className="pname-link" onClick={() => setViewPlayer(p.id)}>
       {p.name}
       {p.foreign && <span className="foreign-tag">洋將</span>}
       {p.injuryDays > 0 && <span className="injury-tag">傷 {p.injuryDays} 天</span>}
-    </>
+    </span>
   )
 }
 
@@ -127,10 +130,10 @@ export default function Roster() {
 
   const batCols = mode === 'rate'
     ? ['打擊', '力量', '選球', '速度', '守備', '士氣']
-    : ['AVG', 'HR', '打點', '盜壘', '三振', '士氣']
+    : ['AVG', 'HR', '打點', '盜壘', '失誤', '士氣']
   const batVals = (p: Player) => mode === 'rate'
     ? [p.contact, p.power, p.eye, p.speed, p.field]
-    : [avg(p.bat.h, p.bat.ab), p.bat.hr, p.bat.rbi, p.bat.sb, p.bat.so]
+    : [avg(p.bat.h, p.bat.ab), p.bat.hr, p.bat.rbi, p.bat.sb, p.bat.e]
   const pitCols = mode === 'rate'
     ? ['球威', '控球', '球速', '體力', '士氣']
     : ['ERA', '勝-敗', 'SV', '局數', '士氣']
@@ -167,13 +170,22 @@ export default function Roster() {
             </thead>
             <tbody>
               {lineup.map((p, i) => {
-                const slotPos = team.lineupPos?.[i] ?? p.pos
-                const eligible = roster.filter(q =>
-                  !q.isP && healthyEligible(q) && q.id !== p.id && (slotPos === 'DH' ? true : q.pos === slotPos || team.lineup.includes(q.id)))
+                const slotPos = (team.lineupPos?.[i] ?? p.pos) as Pos
+                const apt = posFactor(p.pos, slotPos)
+                const eligible = roster
+                  .filter(q => !q.isP && healthyEligible(q) && q.id !== p.id)
+                  .sort((a, b) => posFactor(b.pos, slotPos) - posFactor(a.pos, slotPos) || ovr(b) - ovr(a))
                 return (
                   <tr key={p.id}>
                     <td><b>{i + 1}</b></td>
-                    <td><span className="lineup-pos">{slotPos}</span>{slotPos !== p.pos && slotPos !== 'DH' && <span className="muted" style={{ fontSize: 11 }}>({p.pos})</span>}</td>
+                    <td>
+                      <span className="lineup-pos">{slotPos}</span>
+                      {apt < 1 && slotPos !== 'DH' && (
+                        <span style={{ fontSize: 11, color: apt >= 0.85 ? 'var(--gold)' : 'var(--red2)' }}>
+                          {p.pos} 適性{Math.round(apt * 100)}%
+                        </span>
+                      )}
+                    </td>
                     <td><PName p={p} /></td>
                     <td className="num">{p.age}</td>
                     <td><OvrBadge v={ovr(p)} /></td>
@@ -185,7 +197,11 @@ export default function Roster() {
                         <button style={{ padding: '1px 7px' }} onClick={() => move(i, 1)}>↓</button>
                         <select value="" onChange={e => { if (e.target.value) replaceLineup(i, Number(e.target.value)) }}>
                           <option value="">替換…</option>
-                          {eligible.map(q => <option key={q.id} value={q.id}>{q.name} ({q.pos}/{ovr(q)})</option>)}
+                          {eligible.map(q => (
+                            <option key={q.id} value={q.id}>
+                              {q.name} ({q.pos}/{ovr(q)}{slotPos !== 'DH' ? `・適性${Math.round(posFactor(q.pos, slotPos) * 100)}%` : ''})
+                            </option>
+                          ))}
                         </select>
                       </td>
                     )}
