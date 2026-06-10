@@ -233,6 +233,16 @@ table.data tr.hl td { background: rgba(214, 54, 47, 0.12); }
 .outs-dots { display: flex; gap: 4px; justify-content: center; margin-top: 4px; }
 .outs-dots i { width: 9px; height: 9px; border-radius: 50%; background: #36404f; }
 .outs-dots i.on { background: var(--red2); }
+.tactics-bar {
+  display: flex; align-items: center; gap: 10px; padding: 8px 18px;
+  background: #11161d; border-bottom: 1px solid var(--line); font-size: 13px;
+}
+.tactics-bar button { padding: 3px 12px; font-size: 13px; }
+.bench-pop {
+  display: flex; flex-wrap: wrap; gap: 6px; padding: 10px 18px;
+  background: #0e1318; border-bottom: 1px solid var(--line);
+}
+.bench-pop button { padding: 3px 10px; font-size: 12px; }
 .pb-log { flex: 1; overflow: auto; padding: 14px 20px; display: flex; flex-direction: column; gap: 7px; }
 .pb-line { line-height: 1.7; font-size: 14px; color: #c8d1de; animation: fadein 0.25s; }
 .pb-line.big { color: var(--gold); font-weight: 700; }
@@ -253,6 +263,19 @@ table.data tr.hl td { background: rgba(214, 54, 47, 0.12); }
 .foreign-tag {
   font-size: 10px; background: var(--blue); border-radius: 2px; padding: 0 4px; margin-left: 5px;
   vertical-align: middle;
+}
+.injury-tag {
+  font-size: 10px; background: var(--red); border-radius: 2px; padding: 0 4px; margin-left: 5px;
+  vertical-align: middle;
+}
+.hof-card {
+  border-left: 3px solid var(--gold); padding: 8px 12px; margin-bottom: 8px;
+  background: rgba(232, 185, 60, 0.05); line-height: 1.7;
+}
+.year-card { border-bottom: 1px solid var(--line); padding: 10px 4px; line-height: 1.8; }
+.allstar-banner {
+  background: linear-gradient(120deg, rgba(31, 78, 140, 0.35), rgba(200, 16, 46, 0.35));
+  border: 1px solid var(--gold); border-radius: 6px; padding: 18px; margin-bottom: 14px;
 }
 
 /* ===== 交易 ===== */

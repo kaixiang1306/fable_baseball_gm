@@ -10,6 +10,8 @@ export interface PitStats {
   bb: number; so: number; hr: number; w: number; l: number; sv: number
 }
 
+export interface CareerStats { bat: BatStats; pit: PitStats; seasons: number }
+
 export interface Player {
   id: number
   name: string
@@ -26,8 +28,14 @@ export interface Player {
   years: number        // 合約剩餘年數
   teamId: number       // -1 = 自由球員, -2 = 選秀新秀
   onMain: boolean      // 一軍
-  bat: BatStats
-  pit: PitStats
+  morale: number       // 個人士氣 0-100
+  injuryDays: number   // 傷停剩餘天數（0 = 健康）
+  negoFails: number    // 本季續約談判破局次數
+  bat: BatStats        // 一軍打擊數據
+  pit: PitStats        // 一軍投球數據
+  fbat: BatStats       // 二軍打擊數據
+  fpit: PitStats       // 二軍投球數據
+  career: CareerStats  // 一軍生涯累計
 }
 
 export interface OwnerPrefs {
@@ -61,6 +69,8 @@ export interface Team {
   closer: number      // 終結者 id（-1 無）
   nextSP: number      // 下一位先發索引
   rec: [TeamRecord, TeamRecord]  // [上半季, 下半季]
+  farmRec: TeamRecord            // 二軍戰績
+  conference: 'north' | 'south'  // 明星賽分組
 }
 
 export interface Game {
@@ -73,6 +83,7 @@ export interface Game {
   hs: number
   as: number
   inn: number
+  injuries?: { pid: number; days: number }[]  // 本場新增傷兵（處理後移除）
 }
 
 export interface NewsItem { year: number; day: number; text: string; kind: 'game' | 'trade' | 'sign' | 'league' | 'owner' }
@@ -90,11 +101,38 @@ export interface PBEvent {
   big: boolean        // 重要事件（得分/全壘打）
 }
 
-export type Phase = 'season' | 'ts' | 'eval' | 'fa' | 'draft' | 'gameover'
+export type Phase = 'season' | 'allstar' | 'ts' | 'eval' | 'fa' | 'draft' | 'gameover'
 
-export interface TaiwanSeries { a: number; b: number; wa: number; wb: number; note: string }
+export interface TaiwanSeries { a: number; b: number; wa: number; wb: number; note: string; pendingGame?: number }
 
 export interface TeamFinance { revenue: number; salaries: number }
+
+export interface AllStarState {
+  nLineup: number[]; nPos: Pos[]; nPitchers: number[]
+  sLineup: number[]; sPos: Pos[]; sPitchers: number[]
+  played: boolean
+  ns: number; ss: number
+  mvp: string
+}
+
+export interface LeaderLine { label: string; name: string; team: string; value: string }
+
+export interface YearRecord {
+  year: number
+  champion: string
+  tsLine: string
+  leaders: LeaderLine[]
+  userLine: string
+}
+
+export interface HofEntry {
+  name: string
+  pos: string
+  retiredYear: number
+  seasons: number
+  line: string
+  lastTeam: string
+}
 
 export interface League {
   year: number
@@ -115,4 +153,7 @@ export interface League {
   champs: { year: number; team: number }[]
   finance: Record<number, TeamFinance>
   evalResult: { passed: boolean; lines: string[]; fired: boolean } | null
+  allStar: AllStarState | null
+  history: YearRecord[]
+  hallOfFame: HofEntry[]
 }

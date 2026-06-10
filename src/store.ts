@@ -1,24 +1,32 @@
 import { create } from 'zustand'
-import type { League, PBEvent, Player } from './types'
+import type { League, Player } from './types'
 import { createLeague, autoLineup } from './engine/league'
-import { playDay, TOTAL_DAYS } from './engine/season'
+import { advanceDay, startLiveGame, userGameToday, TOTAL_DAYS } from './engine/season'
 import { setNextPlayerId } from './engine/playerGen'
+import { LiveGame } from './engine/sim'
+import { allStarLiveGame, applyAllStarResult } from './engine/allstar'
 import { startOffseason, finishFA, signFA, draftPickPlayer, runAIDraftPicks } from './engine/offseason'
 import { evaluateTrade, executeTrade, type TradeVerdict } from './engine/trade'
+import { offerExtension, type NegoResult } from './engine/contracts'
 
-const SAVE_KEY = 'fable-gm-save-v1'
+const SAVE_KEY = 'fable-gm-save-v2'
 
 export type Screen = 'title' | 'select' | 'main'
-export type MainTab = 'calendar' | 'roster' | 'standings' | 'leaders' | 'trade' | 'finance'
+export type MainTab = 'calendar' | 'roster' | 'standings' | 'leaders' | 'trade' | 'finance' | 'history'
 
-interface PendingWatch { events: PBEvent[]; homeName: string; awayName: string }
+export interface WatchState {
+  lg: LiveGame
+  homeName: string
+  awayName: string
+  exhibition: boolean
+}
 
 interface Store {
   league: League | null
   screen: Screen
   tab: MainTab
   tick: number
-  watch: PendingWatch | null
+  watch: WatchState | null
   hasSave: boolean
 
   newGame: (teamId: number) => void
@@ -32,9 +40,10 @@ interface Store {
   simDays: (n: number) => void
   simToHalfEnd: () => void
   watchToday: () => void
-  closeWatch: () => void
+  finishWatch: () => void
 
   proposeTrade: (otherTeam: number, give: Player[], get: Player[]) => TradeVerdict
+  negotiate: (p: Player, salary: number, years: number) => NegoResult
   goOffseason: () => void
   userSignFA: (p: Player) => void
   userFinishFA: () => void
@@ -90,8 +99,8 @@ export const useStore = create<Store>((set, get) => ({
     const L = get().league
     if (!L) return
     for (let i = 0; i < n; i++) {
-      if (L.phase !== 'season' && L.phase !== 'ts') break
-      playDay(L, false)
+      if (L.phase !== 'season' && L.phase !== 'ts' && L.phase !== 'allstar') break
+      advanceDay(L)
     }
     save(L)
     set(s => ({ tick: s.tick + 1 }))
@@ -101,30 +110,38 @@ export const useStore = create<Store>((set, get) => ({
     if (!L) return
     const target = L.day <= L.daysPerHalf ? L.daysPerHalf : TOTAL_DAYS
     let guard = 0
-    while (L.phase === 'season' && L.day <= target && guard++ < 200) playDay(L, false)
+    while (L.phase === 'season' && L.day <= target && guard++ < 200) advanceDay(L)
     save(L)
     set(s => ({ tick: s.tick + 1 }))
   },
   watchToday: () => {
     const L = get().league
-    if (!L || (L.phase !== 'season' && L.phase !== 'ts')) return
-    let homeName = '', awayName = ''
-    if (L.phase === 'season') {
-      const g = L.schedule.find(g => g.day === L.day && !g.played && (g.home === L.userTeam || g.away === L.userTeam))
-      if (!g) { get().simDays(1); return }
-      homeName = L.teams[g.home].name; awayName = L.teams[g.away].name
-    } else if (L.ts) {
-      if (L.ts.a !== L.userTeam && L.ts.b !== L.userTeam) { get().simDays(1); return }
-      const gameNo = L.ts.wa + L.ts.wb + 1
-      const aHome = [1, 2, 6, 7].includes(gameNo)
-      homeName = L.teams[aHome ? L.ts.a : L.ts.b].name
-      awayName = L.teams[aHome ? L.ts.b : L.ts.a].name
+    if (!L || get().watch) return
+    if (L.phase === 'allstar') {
+      const lg = allStarLiveGame(L)
+      set(s => ({ tick: s.tick + 1, watch: { lg, homeName: '北軍明星隊', awayName: '南軍明星隊', exhibition: true } }))
+      return
     }
-    const events = playDay(L, true)
-    save(L)
-    set(s => ({ tick: s.tick + 1, watch: events ? { events, homeName, awayName } : null }))
+    if (L.phase !== 'season' && L.phase !== 'ts') return
+    const g = userGameToday(L)
+    if (!g) { get().simDays(1); return }
+    const lg = startLiveGame(L, g)
+    set(s => ({
+      tick: s.tick + 1,
+      watch: { lg, homeName: L.teams[g.home].name, awayName: L.teams[g.away].name, exhibition: false },
+    }))
   },
-  closeWatch: () => set({ watch: null }),
+  finishWatch: () => {
+    const L = get().league
+    const w = get().watch
+    if (!L || !w) return
+    let guard = 0
+    while (!w.lg.done && guard++ < 2000) w.lg.step()
+    if (w.exhibition) applyAllStarResult(L, w.lg)
+    else advanceDay(L) // 結算當日其餘比賽並推進
+    save(L)
+    set(s => ({ tick: s.tick + 1, watch: null }))
+  },
 
   proposeTrade: (otherTeam, give, get_) => {
     const L = get().league!
@@ -137,6 +154,14 @@ export const useStore = create<Store>((set, get) => ({
       set(s => ({ tick: s.tick + 1 }))
     }
     return verdict
+  },
+
+  negotiate: (p, salary, years) => {
+    const L = get().league!
+    const result = offerExtension(L, p, salary, years)
+    save(L)
+    set(s => ({ tick: s.tick + 1 }))
+    return result
   },
 
   goOffseason: () => {

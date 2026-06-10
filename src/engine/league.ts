@@ -8,11 +8,15 @@ export const DAYS_PER_HALF = 60
 export const TRADE_DEADLINE_DAY = 90
 export const MAIN_ROSTER_SIZE = 26
 
-/** 自動編排一軍 26 人、打序、輪值、牛棚 */
+/** 自動編排一軍 26 人、打序、輪值、牛棚（傷兵優先排除） */
 export function autoLineup(L: League, team: Team) {
   const roster = Object.values(L.players).filter(p => p.teamId === team.id)
-  const batters = roster.filter(p => !p.isP).sort((a, b) => ovr(b) - ovr(a))
-  const pitchers = roster.filter(p => p.isP).sort((a, b) => ovr(b) - ovr(a))
+  const allBat = roster.filter(p => !p.isP).sort((a, b) => ovr(b) - ovr(a))
+  const allPit = roster.filter(p => p.isP).sort((a, b) => ovr(b) - ovr(a))
+  const hb = allBat.filter(p => p.injuryDays === 0)
+  const hp = allPit.filter(p => p.injuryDays === 0)
+  const batters = hb.length >= 9 ? hb : allBat
+  const pitchers = hp.length >= 6 ? hp : allPit
 
   // 每個守位挑最強者
   const positions = ['C', '1B', '2B', '3B', 'SS', 'LF', 'CF', 'RF'] as const
@@ -115,6 +119,8 @@ export function createLeague(userTeam: number, year = 2026): League {
     morale: 55,
     lineup: [], lineupPos: [], rotation: [], bullpen: [], closer: -1, nextSP: 0,
     rec: [{ w: 0, l: 0, t: 0 }, { w: 0, l: 0, t: 0 }],
+    farmRec: { w: 0, l: 0, t: 0 },
+    conference: def.conference,
   }))
 
   TEAM_DEFS.forEach((def, id) => {
@@ -135,6 +141,9 @@ export function createLeague(userTeam: number, year = 2026): League {
     champs: [],
     finance,
     evalResult: null,
+    allStar: null,
+    history: [],
+    hallOfFame: [],
   }
   teams.forEach(t => autoLineup(L, t))
   teams.forEach(t => setOwnerGoals(L, t))

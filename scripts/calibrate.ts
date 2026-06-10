@@ -5,7 +5,7 @@ import { ovr } from '../src/engine/playerGen'
 const L = createLeague(0)
 
 let guard = 0
-while ((L.phase === 'season' || L.phase === 'ts') && guard++ < 400) {
+while ((L.phase === 'season' || L.phase === 'ts' || L.phase === 'allstar') && guard++ < 400) {
   playDay(L, false)
 }
 

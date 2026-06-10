@@ -1,28 +1,80 @@
-import type { League, Player, Team } from '../types'
+import type { BatStats, League, PitStats, Player, Team } from '../types'
 import { emptyBat, emptyPit, fairSalary, genProspect, ovr, setNextPlayerId, getNextPlayerId, genBatter, genPitcher } from './playerGen'
 import { autoLineup, genSeasonSchedule, setOwnerGoals, teamPayroll } from './league'
 import { standings } from './season'
-import { clamp, randInt, rand, shuffle } from './util'
+import { clamp, randInt, rand, shuffle, avg, era } from './util'
 import type { Pos } from '../types'
 
 export const DRAFT_ROUNDS = 3
 
-/** 進入休賽季：合約到期 → 自由市場、引退、產生選秀名單 */
+function addBat(dst: BatStats, src: BatStats) {
+  for (const k of Object.keys(src) as (keyof BatStats)[]) dst[k] += src[k]
+}
+function addPit(dst: PitStats, src: PitStats) {
+  for (const k of Object.keys(src) as (keyof PitStats)[]) dst[k] += src[k]
+}
+
+/** 名人堂門檻判定（生涯一軍數據） */
+function hofCheck(p: Player): string | null {
+  const c = p.career
+  if (p.isP) {
+    const eraOk = c.pit.outs >= 4200 && (c.pit.er * 27) / c.pit.outs <= 3.15
+    if (c.pit.w >= 110 || c.pit.sv >= 130 || c.pit.so >= 1450 || eraOk) {
+      return `通算 ${c.pit.w} 勝 ${c.pit.l} 敗 ${c.pit.sv} 救援・防禦率 ${era(c.pit.er, c.pit.outs)}・${c.pit.so} 次三振`
+    }
+    return null
+  }
+  const avgOk = c.bat.pa >= 3000 && c.bat.h / Math.max(1, c.bat.ab) >= 0.305
+  if (c.bat.h >= 900 || c.bat.hr >= 140 || c.bat.sb >= 250 || avgOk) {
+    return `通算打擊率 ${avg(c.bat.h, c.bat.ab)}・${c.bat.h} 安・${c.bat.hr} 轟・${c.bat.rbi} 打點・${c.bat.sb} 盜`
+  }
+  return null
+}
+
+/** 進入休賽季：生涯累計 → AI 續約 → 合約到期 → 引退/名人堂 → 選秀名單 */
 export function startOffseason(L: League) {
   setNextPlayerId(L.nextPlayerId)
   const retired: string[] = []
   L.faPool = []
 
+  // 本季數據累計入生涯
   for (const p of Object.values(L.players)) {
+    if (p.bat.pa > 0 || p.pit.g > 0) p.career.seasons++
+    addBat(p.career.bat, p.bat)
+    addPit(p.career.pit, p.pit)
+  }
+
+  for (const p of Object.values(L.players)) {
+    const wasFA = p.teamId === -1
     p.years--
     if (p.years <= 0) {
-      // 引退判定
-      const retireP = p.age >= 38 ? 1 : p.age >= 35 ? 0.35 : p.age >= 33 && ovr(p) < 45 ? 0.4 : 0
+      const lastTeamName = p.teamId >= 0 ? L.teams[p.teamId].name : '自由球員'
+      // 引退判定（整年無人問津的自由球員多半淡出聯盟）
+      let retireP = p.age >= 38 ? 1 : p.age >= 35 ? 0.35 : p.age >= 33 && ovr(p) < 45 ? 0.4 : 0
+      if (wasFA) retireP = Math.max(retireP, ovr(p) < 50 ? 0.8 : 0.4)
       if (rand() < retireP) {
         if (p.teamId >= 0 || ovr(p) >= 55) retired.push(p.name)
+        const hofLine = hofCheck(p)
+        if (hofLine) {
+          L.hallOfFame.unshift({
+            name: p.name, pos: p.pos, retiredYear: L.year,
+            seasons: p.career.seasons, line: hofLine, lastTeam: lastTeamName,
+          })
+          L.news.unshift({ year: L.year, day: L.day, kind: 'league', text: `傳奇落幕！${p.name}（${lastTeamName}）宣布引退，並以壓倒性的生涯成績入選名人堂！` })
+        }
         delete L.players[p.id]
         L.teams.forEach(t => removeFromDepth(t, p.id))
         continue
+      }
+      // AI 球隊自動續留主力
+      if (p.teamId >= 0 && p.teamId !== L.userTeam && ovr(p) >= 55 && rand() < 0.6) {
+        const newSalary = Math.round(fairSalary(p) * (1 + rand() * 0.1))
+        if (teamPayroll(L, p.teamId) - p.salary * 12 + newSalary * 12 <= L.teams[p.teamId].budget) {
+          p.salary = newSalary
+          p.years = randInt(2, 3)
+          if (ovr(p) >= 64) L.news.unshift({ year: L.year, day: L.day, kind: 'sign', text: `${L.teams[p.teamId].name} 搶先綁約，與 ${p.name} 完成 ${p.years} 年續約。` })
+          continue
+        }
       }
       if (p.teamId >= 0) L.teams.forEach(t => { if (t.id === p.teamId) removeFromDepth(t, p.id) })
       p.teamId = -1
@@ -88,8 +140,8 @@ export function finishFA(L: League) {
       const nBat = roster.filter(p => !p.isP).length
       const nPit = roster.filter(p => p.isP).length
       const payroll = teamPayroll(L, t.id)
-      const needBat = nBat < 16
-      const needPit = nPit < 12
+      const needBat = nBat < 23
+      const needPit = nPit < 17
       if (!needBat && !needPit) continue
       const cands = L.faPool
         .map(id => L.players[id])
@@ -146,7 +198,9 @@ function developPlayers(L: League) {
     const pitKeys = ['velo', 'ctrl', 'stuff', 'stam'] as const
     const ks = p.isP ? pitKeys : batKeys
     if (p.age <= 26 && o < p.pot) {
-      const boost = randInt(1, 4)
+      // 出賽經驗（一二軍皆計）加速成長
+      const usage = p.bat.pa + p.fbat.pa + (p.pit.outs + p.fpit.outs) * 1.5
+      const boost = randInt(1, 4) + (usage >= 250 ? 1 : 0)
       for (let i = 0; i < boost; i++) grow(ks[randInt(0, ks.length - 1)], randInt(1, 3))
     } else if (p.age <= 30) {
       grow(ks[randInt(0, ks.length - 1)], randInt(-1, 1))
@@ -172,17 +226,17 @@ export function ensureAllRosters(L: League) {
         L.players[np.id] = np
       }
     }
-    while (roster().filter(p => !p.isP).length < 12) {
-      const np = genBatter((['LF', 'RF', '1B', 'DH'] as Pos[])[randInt(0, 3)], 40, { age: randInt(19, 23) })
+    while (roster().filter(p => !p.isP).length < 23) {
+      const np = genBatter((['LF', 'RF', '1B', 'DH', 'C', '2B'] as Pos[])[randInt(0, 5)], 40, { age: randInt(19, 23) })
       np.teamId = t.id; np.salary = 8; np.years = 3
       L.players[np.id] = np
     }
-    while (roster().filter(p => p.isP && p.pos === 'SP').length < 5) {
+    while (roster().filter(p => p.isP && p.pos === 'SP').length < 7) {
       const np = genPitcher('SP', 42, { age: randInt(19, 24) })
       np.teamId = t.id; np.salary = 8; np.years = 3
       L.players[np.id] = np
     }
-    while (roster().filter(p => p.isP).length < 11) {
+    while (roster().filter(p => p.isP).length < 17) {
       const np = genPitcher('RP', 40, { age: randInt(19, 24) })
       np.teamId = t.id; np.salary = 8; np.years = 3
       L.players[np.id] = np
@@ -199,10 +253,17 @@ function rolloverSeason(L: League) {
   L.phase = 'season'
   L.ts = null
   L.evalResult = null
+  L.allStar = null
   L.schedule = genSeasonSchedule()
-  for (const p of Object.values(L.players)) { p.bat = emptyBat(); p.pit = emptyPit() }
+  for (const p of Object.values(L.players)) {
+    p.bat = emptyBat(); p.pit = emptyPit()
+    p.fbat = emptyBat(); p.fpit = emptyPit()
+    p.injuryDays = 0
+    p.negoFails = 0
+  }
   for (const t of L.teams) {
     t.rec = [{ w: 0, l: 0, t: 0 }, { w: 0, l: 0, t: 0 }]
+    t.farmRec = { w: 0, l: 0, t: 0 }
     t.morale = 55
     t.nextSP = 0
     L.finance[t.id] = { revenue: 0, salaries: 0 }

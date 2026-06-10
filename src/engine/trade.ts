@@ -2,6 +2,7 @@ import type { League, Player } from '../types'
 import { fairSalary, ovr } from './playerGen'
 import { teamPayroll } from './league'
 import { TRADE_DEADLINE_DAY } from './league'
+import { clamp } from './util'
 
 /** 球員交易價值 */
 export function tradeValue(p: Player): number {
@@ -19,6 +20,9 @@ export function tradeValue(p: Player): number {
   v -= Math.max(0, p.salary - fairSalary(p)) * 0.35
   // 洋將約短，價值略低
   if (p.foreign) v *= 0.85
+  // 傷兵與低士氣折價
+  if (p.injuryDays > 0) v *= clamp(1 - p.injuryDays / 120, 0.5, 1)
+  v *= 1 + (p.morale - 55) / 400
   return Math.max(1, v)
 }
 
@@ -48,7 +52,7 @@ export function evaluateTrade(L: League, otherTeam: number, give: Player[], get:
   const otherRoster = Object.values(L.players).filter(p => p.teamId === otherTeam)
   const batLeft = otherRoster.filter(p => !p.isP).length - get.filter(p => !p.isP).length + give.filter(p => !p.isP).length
   const pitLeft = otherRoster.filter(p => p.isP).length - get.filter(p => p.isP).length + give.filter(p => p.isP).length
-  if (batLeft < 11 || pitLeft < 9) {
+  if (batLeft < 14 || pitLeft < 12) {
     return { accept: false, reason: `${L.teams[otherTeam].name} 表示交易後陣容深度不足，婉拒這筆交易。`, diff }
   }
 
@@ -60,8 +64,8 @@ export function evaluateTrade(L: League, otherTeam: number, give: Player[], get:
 
 export function executeTrade(L: League, otherTeam: number, give: Player[], get: Player[]) {
   const user = L.userTeam
-  give.forEach(p => { p.teamId = otherTeam; p.onMain = false })
-  get.forEach(p => { p.teamId = user; p.onMain = false })
+  give.forEach(p => { p.teamId = otherTeam; p.onMain = false; p.morale = clamp(p.morale - 8, 5, 99) })
+  get.forEach(p => { p.teamId = user; p.onMain = false; p.morale = clamp(p.morale - 8, 5, 99) })
   const giveNames = give.map(p => p.name).join('、')
   const getNames = get.map(p => p.name).join('、')
   L.news.unshift({

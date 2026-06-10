@@ -9,6 +9,7 @@ import Standings from './Standings'
 import Leaders from './Leaders'
 import Trade from './Trade'
 import Finance from './Finance'
+import History from './History'
 
 const TABS: { key: MainTab; label: string }[] = [
   { key: 'calendar', label: '行事曆' },
@@ -17,6 +18,7 @@ const TABS: { key: MainTab; label: string }[] = [
   { key: 'leaders', label: '數據王' },
   { key: 'trade', label: '交易' },
   { key: 'finance', label: '財務與老闆' },
+  { key: 'history', label: '歷史' },
 ]
 
 export default function MainShell() {
@@ -31,7 +33,8 @@ export default function MainShell() {
   const inSeason = league.phase === 'season'
   const dateLabel = inSeason && league.day <= TOTAL_DAYS
     ? `${league.year}/${dayToDate(league.year, league.day).label}`
-    : league.phase === 'ts' ? `${league.year} 台灣大賽` : `${league.year}`
+    : league.phase === 'ts' ? `${league.year} 台灣大賽`
+      : league.phase === 'allstar' ? `${league.year} 明星賽` : `${league.year}`
   const halfLabel = inSeason ? (league.day <= league.daysPerHalf ? `上半季 第 ${league.day} 戰` : `下半季 第 ${league.day - league.daysPerHalf} 戰`) : ''
 
   return (
@@ -62,6 +65,7 @@ export default function MainShell() {
         {tab === 'leaders' && <Leaders />}
         {tab === 'trade' && <Trade />}
         {tab === 'finance' && <Finance />}
+        {tab === 'history' && <History />}
       </div>
     </>
   )

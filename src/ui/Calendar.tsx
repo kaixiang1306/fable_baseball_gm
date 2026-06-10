@@ -10,6 +10,7 @@ export default function Calendar() {
 
   const user = league.userTeam
   const inTS = league.phase === 'ts'
+  const inAS = league.phase === 'allstar'
 
   // 顯示視窗：目前天的前 7 天～後 20 天
   const from = Math.max(1, league.day - 7)
@@ -48,12 +49,27 @@ export default function Calendar() {
     )
   }
 
-  const canPlay = league.phase === 'season' || league.phase === 'ts'
+  const canPlay = league.phase === 'season' || league.phase === 'ts' || inAS
   const userInTS = inTS && league.ts && (league.ts.a === user || league.ts.b === user)
+  const allStarNames = (ids: number[]) =>
+    ids.map(id => league.players[id]).filter(Boolean).map(p => p.name).join('、')
 
   return (
     <div className="cal-layout">
       <div>
+        {inAS && league.allStar && (
+          <div className="allstar-banner">
+            <div className="big-title" style={{ fontSize: 24 }}>⭐ 明星賽週末 — 北軍 vs 南軍</div>
+            <div className="muted" style={{ margin: '6px 0 10px', lineHeight: 1.8 }}>
+              北軍先發：{allStarNames(league.allStar.nLineup)}<br />
+              南軍先發：{allStarNames(league.allStar.sLineup)}
+            </div>
+            <div style={{ display: 'flex', gap: 8 }}>
+              <button className="primary" onClick={watchToday}>觀看明星賽</button>
+              <button onClick={() => simDays(1)}>快速進行</button>
+            </div>
+          </div>
+        )}
         {inTS && league.ts && (
           <div className="panel" style={{ marginBottom: 14 }}>
             <div className="panel-head">台灣大賽</div>
@@ -68,19 +84,21 @@ export default function Calendar() {
           </div>
         )}
 
-        <div className="sim-actions">
-          <button className="primary" onClick={watchToday} disabled={!canPlay || (inTS && !userInTS)}>
-            觀看今日比賽
-          </button>
-          <button onClick={() => simDays(1)} disabled={!canPlay}>模擬 1 天</button>
-          <button onClick={() => simDays(7)} disabled={!canPlay || inTS}>模擬 1 週</button>
-          <button onClick={simToHalfEnd} disabled={league.phase !== 'season'}>
-            模擬至{league.day <= league.daysPerHalf ? '上' : '下'}半季結束
-          </button>
-          {inTS && <button onClick={() => simDays(1)}>模擬下一戰</button>}
-        </div>
+        {!inAS && (
+          <div className="sim-actions">
+            <button className="primary" onClick={watchToday} disabled={!canPlay || (inTS && !userInTS)}>
+              觀看今日比賽
+            </button>
+            <button onClick={() => simDays(1)} disabled={!canPlay}>模擬 1 天</button>
+            <button onClick={() => simDays(7)} disabled={!canPlay || inTS}>模擬 1 週</button>
+            <button onClick={simToHalfEnd} disabled={league.phase !== 'season'}>
+              模擬至{league.day <= league.daysPerHalf ? '上' : '下'}半季結束
+            </button>
+            {inTS && <button onClick={() => simDays(1)}>模擬下一戰</button>}
+          </div>
+        )}
 
-        {!inTS && <div className="cal-grid">{cells}</div>}
+        {!inTS && !inAS && <div className="cal-grid">{cells}</div>}
       </div>
 
       <div className="panel">

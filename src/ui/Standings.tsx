@@ -45,6 +45,33 @@ export default function Standings() {
           )}
         </div>
       </div>
+
+      <div className="panel" style={{ marginTop: 16 }}>
+        <div className="panel-head">二軍戰績</div>
+        <div className="panel-body">
+          <table className="data">
+            <thead>
+              <tr><th>球隊</th><th className="num">勝</th><th className="num">敗</th><th className="num">和</th><th className="num">勝率</th></tr>
+            </thead>
+            <tbody>
+              {league.teams.slice().sort((a, b) => {
+                const pa = a.farmRec.w + a.farmRec.l === 0 ? 0 : a.farmRec.w / (a.farmRec.w + a.farmRec.l)
+                const pb = b.farmRec.w + b.farmRec.l === 0 ? 0 : b.farmRec.w / (b.farmRec.w + b.farmRec.l)
+                return pb - pa
+              }).map(t => (
+                <tr key={t.id} className={t.id === league.userTeam ? 'hl' : ''}>
+                  <td style={{ display: 'flex', alignItems: 'center', gap: 8 }}><Logo team={t} size={22} />{t.name}二軍</td>
+                  <td className="num">{t.farmRec.w}</td>
+                  <td className="num">{t.farmRec.l}</td>
+                  <td className="num">{t.farmRec.t}</td>
+                  <td className="num">{t.farmRec.w + t.farmRec.l === 0 ? '-' : (t.farmRec.w / (t.farmRec.w + t.farmRec.l)).toFixed(3)}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+          <div className="muted" style={{ marginTop: 8, fontSize: 12 }}>二軍每日與一軍同步開打，年輕球員累積出賽經驗可加速成長。</div>
+        </div>
+      </div>
     </div>
   )
 }

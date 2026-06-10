@@ -1,7 +1,11 @@
-import type { Game, League, PBEvent, Team } from '../types'
-import { simulateGame } from './sim'
-import { autoLineup, teamPayroll, DAYS_PER_HALF } from './league'
-import { clamp, fmtMoney } from './util'
+import type { Game, League, LeaderLine, Team } from '../types'
+import { LiveGame, simulateGame, squadFromTeam } from './sim'
+import { teamPayroll, DAYS_PER_HALF } from './league'
+import { playFarmDay } from './farm'
+import { setupAllStar, runAllStarQuick } from './allstar'
+import { handleInjury, handleRecovery } from './rosterOps'
+import { dailyMoraleDrift } from './contracts'
+import { avg, clamp, era, fmtMoney } from './util'
 
 export const OPS_COST = 9000 // 年度固定營運成本（萬）
 export const TOTAL_DAYS = DAYS_PER_HALF * 2
@@ -27,41 +31,100 @@ function gameRevenue(L: League, team: Team): number {
   return Math.round(att * 0.03) // 萬（每位觀眾約 300 元票房與周邊貢獻）
 }
 
-/** 推進一天。watchUser = true 時回傳使用者球隊比賽的逐打席事件 */
-export function playDay(L: League, watchUser: boolean): PBEvent[] | null {
-  if (L.phase === 'ts') return playTSDay(L, watchUser)
-  if (L.phase !== 'season') return null
+/** 取得（必要時建立）使用者今天要打的比賽 */
+export function userGameToday(L: League): Game | null {
+  if (L.phase === 'season') {
+    return L.schedule.find(g => g.day === L.day && g.half !== 0 && !g.played &&
+      (g.home === L.userTeam || g.away === L.userTeam)) ?? null
+  }
+  if (L.phase === 'ts') {
+    const g = ensureTSGame(L)
+    return (g.home === L.userTeam || g.away === L.userTeam) ? g : null
+  }
+  return null
+}
 
-  const games = L.schedule.filter(g => g.day === L.day && !g.played)
-  let userEvents: PBEvent[] | null = null
+/** 建立使用者比賽的即時引擎（供觀看／指揮） */
+export function startLiveGame(L: League, g: Game): LiveGame {
+  const home = squadFromTeam(L, L.teams[g.home])
+  const away = squadFromTeam(L, L.teams[g.away])
+  return new LiveGame(L, home, away, { game: g, statMode: 'main', log: true, userTeamId: L.userTeam })
+}
+
+function ensureTSGame(L: League): Game {
+  const ts = L.ts!
+  if (ts.pendingGame != null) {
+    const g = L.schedule.find(x => x.id === ts.pendingGame)
+    if (g) return g // 已打完但尚未結算的比賽也直接回傳
+  }
+  const gameNo = ts.wa + ts.wb + 1
+  const aHome = [1, 2, 6, 7].includes(gameNo)
+  const g: Game = {
+    id: 900000 + L.day, day: L.day, half: 0,
+    home: aHome ? ts.a : ts.b, away: aHome ? ts.b : ts.a,
+    played: false, hs: 0, as: 0, inn: 9,
+  }
+  L.schedule.push(g)
+  ts.pendingGame = g.id
+  return g
+}
+
+function processGameInjuries(L: League, g: Game) {
+  if (!g.injuries) return
+  for (const inj of g.injuries) {
+    const p = L.players[inj.pid]
+    if (p) handleInjury(L, p, inj.days)
+  }
+  delete g.injuries
+}
+
+function tickInjuryAndMorale(L: League) {
+  for (const p of Object.values(L.players)) {
+    if (p.injuryDays > 0) {
+      p.injuryDays--
+      if (p.injuryDays === 0) handleRecovery(L, p)
+    }
+  }
+  dailyMoraleDrift(L)
+}
+
+/** 推進一天（已含明星賽／台灣大賽分流）。使用者比賽若已由 LiveGame 打完則不重模擬。 */
+export function advanceDay(L: League) {
+  if (L.phase === 'allstar') { runAllStarQuick(L); return }
+  if (L.phase === 'ts') { finishTSDay(L); return }
+  if (L.phase !== 'season') return
+
+  const games = L.schedule.filter(g => g.day === L.day && g.half !== 0)
+  for (const g of games) if (!g.played) simulateGame(L, g, false)
 
   for (const g of games) {
-    const isUser = g.home === L.userTeam || g.away === L.userTeam
-    const { events } = simulateGame(L, g, watchUser && isUser)
-    if (events) userEvents = events
     const home = L.teams[g.home], away = L.teams[g.away]
     const rec = (t: Team) => t.rec[(g.half as 1 | 2) - 1]
     if (g.hs > g.as) { rec(home).w++; rec(away).l++ }
     else if (g.as > g.hs) { rec(away).w++; rec(home).l++ }
     else { rec(home).t++; rec(away).t++ }
     L.finance[g.home].revenue += gameRevenue(L, home)
-    if (isUser) {
+    if (g.home === L.userTeam || g.away === L.userTeam) {
       const us = g.home === L.userTeam ? g.hs : g.as
       const them = g.home === L.userTeam ? g.as : g.hs
       const opp = g.home === L.userTeam ? away : home
       const result = us > them ? '勝' : us < them ? '敗' : '和'
       L.news.unshift({ year: L.year, day: L.day, kind: 'game', text: `對戰 ${opp.name}：${us}:${them} ${result}${g.inn !== 9 ? `（${g.inn} 局）` : ''}` })
     }
+    processGameInjuries(L, g)
   }
 
-  // 半季結束新聞
+  // 二軍同日開打
+  playFarmDay(L, games)
+  tickInjuryAndMorale(L)
+
   if (L.day === DAYS_PER_HALF) {
     const champ = standings(L, 1)[0].team
     L.news.unshift({ year: L.year, day: L.day, kind: 'league', text: `上半季戰罷！${champ.name} 奪下上半季冠軍，預先取得台灣大賽門票！` })
   }
   L.day++
+  if (L.day === DAYS_PER_HALF + 1) { setupAllStar(L); return }
   if (L.day > TOTAL_DAYS) startTaiwanSeries(L)
-  return userEvents
 }
 
 export function tsParticipants(L: League): { a: number; b: number; note: string } {
@@ -81,20 +144,15 @@ function startTaiwanSeries(L: League) {
   L.news.unshift({ year: L.year, day: L.day, kind: 'league', text: `台灣大賽即將開打：${L.teams[a].name} vs ${L.teams[b].name}（${note}），七戰四勝制。` })
 }
 
-function playTSDay(L: League, watchUser: boolean): PBEvent[] | null {
+/** 台灣大賽推進一天（比賽可能已由 LiveGame 打完） */
+export function finishTSDay(L: League) {
   const ts = L.ts!
   const gameNo = ts.wa + ts.wb + 1
-  // 2-3-2 主場安排（a 為較高種子）
-  const aHome = [1, 2, 6, 7].includes(gameNo)
-  const g: Game = {
-    id: 9000 + L.day, day: L.day, half: 0,
-    home: aHome ? ts.a : ts.b, away: aHome ? ts.b : ts.a,
-    played: false, hs: 0, as: 0, inn: 9,
-  }
-  const isUser = g.home === L.userTeam || g.away === L.userTeam
-  const { events } = simulateGame(L, g, watchUser && isUser)
-  L.schedule.push(g)
+  const g = ensureTSGame(L)
+  if (!g.played) simulateGame(L, g, false)
+  ts.pendingGame = undefined
   L.finance[g.home].revenue += gameRevenue(L, L.teams[g.home]) * 1.6
+  processGameInjuries(L, g)
 
   if (g.hs === g.as) {
     L.news.unshift({ year: L.year, day: L.day, kind: 'league', text: `台灣大賽第 ${gameNo} 戰戰成 ${g.hs}:${g.as} 和局，將擇日重賽！` })
@@ -106,6 +164,7 @@ function playTSDay(L: League, watchUser: boolean): PBEvent[] | null {
       text: `台灣大賽 G${gameNo}：${L.teams[g.away].name} ${g.as}:${g.hs} ${L.teams[g.home].name}，系列賽 ${L.teams[ts.a].name} ${ts.wa}-${ts.wb} ${L.teams[ts.b].name}。`,
     })
   }
+  tickInjuryAndMorale(L)
   L.day++
 
   if (ts.wa >= 4 || ts.wb >= 4) {
@@ -113,15 +172,63 @@ function playTSDay(L: League, watchUser: boolean): PBEvent[] | null {
     L.champs.push({ year: L.year, team: champ })
     L.news.unshift({ year: L.year, day: L.day, kind: 'league', text: `🏆 ${L.teams[champ].name} 奪下 ${L.year} 年總冠軍！` })
     L.teams[champ].morale = clamp(L.teams[champ].morale + 10, 20, 95)
+    recordYearHistory(L, champ)
     L.phase = 'eval'
     evaluateOwner(L)
   }
-  return events
+}
+
+/** 舊名稱相容（腳本用）：快速推進一天 */
+export function playDay(L: League, _watch = false) {
+  advanceDay(L)
+  return null
 }
 
 export function userProfit(L: League): number {
   const f = L.finance[L.userTeam]
   return Math.round(f.revenue - teamPayroll(L, L.userTeam) - OPS_COST)
+}
+
+/** 年度數據王（單一領先者） */
+export function seasonLeaders(L: League): LeaderLine[] {
+  const players = Object.values(L.players).filter(p => p.teamId >= 0)
+  const teamGames = Math.max(1, ...L.teams.map(t => t.rec[0].w + t.rec[0].l + t.rec[0].t + t.rec[1].w + t.rec[1].l + t.rec[1].t))
+  const qualBat = players.filter(p => p.bat.pa >= teamGames * 2.6)
+  const qualPit = players.filter(p => p.isP && p.pit.outs >= teamGames * 2.4)
+  const tn = (p: { teamId: number }) => L.teams[p.teamId]?.short ?? '-'
+  const top = <T,>(arr: T[], f: (x: T) => number): T | undefined => arr.slice().sort((a, b) => f(b) - f(a))[0]
+
+  const lines: LeaderLine[] = []
+  const aL = top(qualBat, p => p.bat.h / Math.max(1, p.bat.ab))
+  if (aL) lines.push({ label: '打擊率', name: aL.name, team: tn(aL), value: avg(aL.bat.h, aL.bat.ab) })
+  const hrL = top(players, p => p.bat.hr)
+  if (hrL && hrL.bat.hr > 0) lines.push({ label: '全壘打', name: hrL.name, team: tn(hrL), value: `${hrL.bat.hr} 支` })
+  const rbiL = top(players, p => p.bat.rbi)
+  if (rbiL && rbiL.bat.rbi > 0) lines.push({ label: '打點', name: rbiL.name, team: tn(rbiL), value: `${rbiL.bat.rbi} 分` })
+  const sbL = top(players, p => p.bat.sb)
+  if (sbL && sbL.bat.sb > 0) lines.push({ label: '盜壘', name: sbL.name, team: tn(sbL), value: `${sbL.bat.sb} 次` })
+  const eraL = top(qualPit, p => -(p.pit.er * 27) / Math.max(1, p.pit.outs))
+  if (eraL) lines.push({ label: '防禦率', name: eraL.name, team: tn(eraL), value: era(eraL.pit.er, eraL.pit.outs) })
+  const wL = top(players, p => p.pit.w)
+  if (wL && wL.pit.w > 0) lines.push({ label: '勝投', name: wL.name, team: tn(wL), value: `${wL.pit.w} 勝` })
+  const soL = top(players, p => p.pit.so)
+  if (soL && soL.pit.so > 0) lines.push({ label: '三振', name: soL.name, team: tn(soL), value: `${soL.pit.so} 次` })
+  const svL = top(players, p => p.pit.sv)
+  if (svL && svL.pit.sv > 0) lines.push({ label: '救援', name: svL.name, team: tn(svL), value: `${svL.pit.sv} 次` })
+  return lines
+}
+
+function recordYearHistory(L: League, champ: number) {
+  const ts = L.ts!
+  const me = standings(L, 0).find(r => r.team.id === L.userTeam)!
+  const rank = standings(L, 0).findIndex(r => r.team.id === L.userTeam) + 1
+  L.history.unshift({
+    year: L.year,
+    champion: L.teams[champ].name,
+    tsLine: `${L.teams[ts.a].name} ${ts.wa} - ${ts.wb} ${L.teams[ts.b].name}`,
+    leaders: seasonLeaders(L),
+    userLine: `${L.teams[L.userTeam].name}：${me.w}勝${me.l}敗${me.t}和（第 ${rank} 名）${champ === L.userTeam ? '・總冠軍 🏆' : ''}`,
+  })
 }
 
 /** 賽季結束老闆評鑑 */
@@ -159,7 +266,7 @@ function evaluateOwner(L: League) {
   } else {
     owner.patienceLeft = Math.max(0, owner.patienceLeft - (failures >= 2 ? 2 : 1))
     lines.push(owner.patienceLeft > 0
-      ? `老闆對未達成的目標感到不滿。（信任度剩餘 ${Math.max(0, owner.patienceLeft)}/${owner.prefs.patience}）`
+      ? `老闆對未達成的目標感到不滿。（信任度剩餘 ${owner.patienceLeft}/${owner.prefs.patience}）`
       : '老闆的耐心已經耗盡⋯⋯')
   }
   const fired = owner.patienceLeft <= 0
@@ -169,7 +276,6 @@ function evaluateOwner(L: League) {
 
 /** 比賽日期顯示：開季 3/28 起，週一休兵 */
 export function dayToDate(year: number, day: number): { m: number; d: number; label: string } {
-  // 上半季 3/28 開打；下半季中間休 10 天（明星賽）
   const start = new Date(year, 2, 28)
   let gameDays = 0
   const cur = new Date(start)

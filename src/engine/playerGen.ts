@@ -39,7 +39,10 @@ function base(name: string, age: number, foreign: boolean): Player {
     contact: 30, power: 30, eye: 30, speed: 30, field: 30,
     velo: 30, ctrl: 30, stuff: 30, stam: 30,
     pot: 50, salary: 10, years: randInt(1, 4), teamId: -1, onMain: false,
+    morale: randInt(50, 70), injuryDays: 0, negoFails: 0,
     bat: emptyBat(), pit: emptyPit(),
+    fbat: emptyBat(), fpit: emptyPit(),
+    career: { bat: emptyBat(), pit: emptyPit(), seasons: 0 },
   }
 }
 
@@ -91,12 +94,27 @@ export function genRoster(teamId: number, strength: number, bias: 'bat' | 'pit' 
     const starter = i % 2 === 0
     players.push(genBatter(pos, batMean + (starter ? 4 : -5)))
   })
-  // 洋將：以先發投手為主（中職特色）
+  // 洋將：以先發投手為主
   const foreignSP = randInt(2, 3)
   for (let i = 0; i < foreignSP; i++) players.push(genPitcher('SP', pitMean + 10, { foreign: true, age: randInt(27, 33) }))
   for (let i = 0; i < 6 - foreignSP; i++) players.push(genPitcher('SP', pitMean + (i < 2 ? 3 : -3)))
   for (let i = 0; i < 7; i++) players.push(genPitcher('RP', pitMean + (i < 3 ? 1 : -5)))
   players.push(genPitcher('CP', pitMean + 5))
+
+  // 二軍梯隊：年輕便宜的養成球員
+  const farmPos: Pos[] = ['C', 'SS', '2B', '3B', 'CF', 'RF', '1B', 'LF']
+  for (let i = 0; i < 6; i++) {
+    const p = genBatter(farmPos[i % farmPos.length], batMean - 11, { age: randInt(19, 24) })
+    p.salary = randInt(6, 10); players.push(p)
+  }
+  for (let i = 0; i < 3; i++) {
+    const p = genPitcher('SP', pitMean - 10, { age: randInt(19, 24) })
+    p.salary = randInt(6, 10); players.push(p)
+  }
+  for (let i = 0; i < 3; i++) {
+    const p = genPitcher('RP', pitMean - 11, { age: randInt(19, 24) })
+    p.salary = randInt(6, 10); players.push(p)
+  }
 
   players.forEach(p => { p.teamId = teamId })
   return players
