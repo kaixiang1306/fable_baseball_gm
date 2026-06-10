@@ -1,8 +1,9 @@
 import { useStore } from '../store'
 import type { Player, SeasonLine } from '../types'
 import { ovr, fairSalary } from '../engine/playerGen'
+import { getScoutLevel, SCOUT_LEVEL_LABELS } from '../engine/scouting'
 import { avg, era, ip, obp } from '../engine/util'
-import { OvrBadge } from './bits'
+import { OvrBadge, PotFog } from './bits'
 
 function RatingBar({ label, v }: { label: string; v: number }) {
   const color = v >= 70 ? 'var(--gold)' : v >= 55 ? 'var(--green)' : v >= 42 ? 'var(--blue)' : 'var(--txt-dim)'
@@ -64,7 +65,8 @@ export default function PlayerCard() {
           <div>
             <div className="muted" style={{ lineHeight: 1.9 }}>
               {team ? team.name : p.teamId === -2 ? '選秀適齡' : '自由球員'}・{p.pos}・{p.age} 歲
-              <br />綜合 <OvrBadge v={o} />　潛力 <b className="gold">{p.pot}</b>　士氣 <b>{Math.round(p.morale)}</b>
+              <br />綜合 <OvrBadge v={o} />　潛力 <PotFog p={p} withButton />　士氣 <b>{Math.round(p.morale)}</b>
+              <br />球探情報：<span className="gold">{SCOUT_LEVEL_LABELS[getScoutLevel(league, p)]}</span>
               <br />月薪 {p.salary} 萬（行情 {fairSalary(p)} 萬）・合約剩 {p.years} 年
               <br />{p.onMain ? '一軍名單' : '二軍名單'}・{p.career.seasons} 個一軍球季
             </div>

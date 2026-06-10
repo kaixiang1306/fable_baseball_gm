@@ -1,6 +1,7 @@
 import type { BatStats, League, PitStats, Player, Team } from '../types'
 import { emptyBat, emptyPit, fairSalary, genProspect, ovr, setNextPlayerId, getNextPlayerId, genBatter, genPitcher } from './playerGen'
 import { autoLineup, genSeasonSchedule, setOwnerGoals, teamPayroll } from './league'
+import { accrueScoutPoints, pruneScoutLevels } from './scouting'
 import { standings } from './season'
 import { clamp, randInt, rand, shuffle, avg, era } from './util'
 import type { Pos } from '../types'
@@ -103,6 +104,7 @@ export function startOffseason(L: League) {
     L.players[pr.id] = pr
     L.draftPool.push(pr.id)
   }
+  accrueScoutPoints(L, 6) // 選秀前球探部全力運轉
   // 選秀順位：全年勝率反序
   const order = standings(L, 0).map(r => r.team.id).reverse()
   L.draftOrder = []
@@ -256,6 +258,7 @@ export function ensureAllRosters(L: League) {
 /** 新賽季開始 */
 function rolloverSeason(L: League) {
   ensureAllRosters(L)
+  pruneScoutLevels(L)
   L.year++
   L.day = 1
   L.phase = 'season'

@@ -5,6 +5,7 @@ import { playFarmDay } from './farm'
 import { setupAllStar, runAllStarQuick } from './allstar'
 import { handleInjury, handleRecovery } from './rosterOps'
 import { dailyMoraleDrift } from './contracts'
+import { accrueScoutPoints } from './scouting'
 import { avg, clamp, era, fmtMoney } from './util'
 
 export const OPS_COST = 9000 // 年度固定營運成本（萬）
@@ -123,6 +124,7 @@ export function advanceDay(L: League) {
     L.news.unshift({ year: L.year, day: L.day, kind: 'league', text: `上半季戰罷！${champ.name} 奪下上半季冠軍，預先取得台灣大賽門票！` })
   }
   L.day++
+  if (L.day % 5 === 0) accrueScoutPoints(L, 1) // 球探部每五天送回一份報告額度
   if (L.day === DAYS_PER_HALF + 1) { setupAllStar(L); return }
   if (L.day > TOTAL_DAYS) startTaiwanSeries(L)
 }

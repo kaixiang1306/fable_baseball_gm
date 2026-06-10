@@ -144,6 +144,7 @@ export function createLeague(userTeam: number, year = 2026): League {
     allStar: null,
     history: [],
     hallOfFame: [],
+    scout: { points: 6, levels: {} },
   }
   teams.forEach(t => autoLineup(L, t))
   teams.forEach(t => setOwnerGoals(L, t))

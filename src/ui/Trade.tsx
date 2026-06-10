@@ -2,12 +2,13 @@ import { useState } from 'react'
 import { useStore } from '../store'
 import type { Player } from '../types'
 import { ovr } from '../engine/playerGen'
-import { canTrade, tradeValue } from '../engine/trade'
+import { canTrade, tradeValuePerceived } from '../engine/trade'
 import { TRADE_DEADLINE_DAY } from '../engine/league'
-import { OvrBadge } from './bits'
+import { OvrBadge, PotFog } from './bits'
 
 function PlayerRow({ p, picked, onToggle }: { p: Player; picked: boolean; onToggle: () => void }) {
   const setViewPlayer = useStore(s => s.setViewPlayer)
+  const league = useStore(s => s.league)!
   return (
     <tr className={picked ? 'hl' : ''} onClick={onToggle} style={{ cursor: 'pointer' }}>
       <td><input type="checkbox" checked={picked} readOnly /></td>
@@ -20,9 +21,9 @@ function PlayerRow({ p, picked, onToggle }: { p: Player; picked: boolean; onTogg
       <td>{p.pos}</td>
       <td className="num">{p.age}</td>
       <td><OvrBadge v={ovr(p)} /></td>
-      <td className="num">{p.pot}</td>
+      <td className="num"><PotFog p={p} withButton /></td>
       <td className="num">{p.salary} 萬</td>
-      <td className="num">{Math.round(tradeValue(p))}</td>
+      <td className="num">{Math.round(tradeValuePerceived(league, p))}</td>
     </tr>
   )
 }
@@ -96,9 +97,9 @@ export default function Trade() {
       </div>
 
       <div className="trade-summary">
-        送出：{give.length ? give.map(id => league.players[id].name).join('、') : '—'}（總價值 {Math.round(give.reduce((s, id) => s + tradeValue(league.players[id]), 0))}）
+        送出：{give.length ? give.map(id => league.players[id].name).join('、') : '—'}（總價值 {Math.round(give.reduce((s, id) => s + tradeValuePerceived(league, league.players[id]), 0))}）
         <br />
-        取得：{get_.length ? get_.map(id => league.players[id].name).join('、') : '—'}（總價值 {Math.round(get_.reduce((s, id) => s + tradeValue(league.players[id]), 0))}）
+        取得：{get_.length ? get_.map(id => league.players[id].name).join('、') : '—'}（總價值 {Math.round(get_.reduce((s, id) => s + tradeValuePerceived(league, league.players[id]), 0))}）
         <div style={{ marginTop: 10 }}>
           <button className="primary" disabled={!open || give.length === 0 || get_.length === 0} onClick={submit}>
             提出交易

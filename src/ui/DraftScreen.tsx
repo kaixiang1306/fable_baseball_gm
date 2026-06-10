@@ -1,7 +1,8 @@
 import { useStore } from '../store'
 import { ovr } from '../engine/playerGen'
 import { DRAFT_ROUNDS } from '../engine/offseason'
-import { OvrBadge } from './bits'
+import { potEstimate } from '../engine/scouting'
+import { OvrBadge, PotFog } from './bits'
 
 export default function DraftScreen() {
   const league = useStore(s => s.league)!
@@ -13,14 +14,20 @@ export default function DraftScreen() {
   const round = Math.floor(pickNo / 6) + 1
   const onClock = league.draftOrder[pickNo]
   const isUser = onClock === league.userTeam
+  // 依「球探估計」排序——考察越多，排序越接近真實天賦
+  const estMid = (p: typeof league.players[number]) => {
+    const e = potEstimate(league, p)
+    return (e.lo + e.hi) / 2
+  }
   const pool = league.draftPool.map(id => league.players[id]).filter(Boolean)
-    .sort((a, b) => (ovr(b) + b.pot) - (ovr(a) + a.pot))
+    .sort((a, b) => (ovr(b) + estMid(b)) - (ovr(a) + estMid(a)))
 
   return (
     <div className="content" style={{ maxWidth: 1000, margin: '0 auto' }}>
       <div className="big-title">{league.year} 新人選秀會</div>
       <div className="muted" style={{ marginBottom: 14 }}>
-        共 {DRAFT_ROUNDS} 輪，依全年戰績反序選秀。輪到你時，從名單中挑選最看好的新秀。
+        共 {DRAFT_ROUNDS} 輪，依全年戰績反序選秀。潛力是球探的「估計範圍」——名單排序也只反映你掌握的情報，
+        多派球探考察才不會選到水貨、或錯過璞玉。
       </div>
       <div className="panel" style={{ marginBottom: 14 }}>
         <div className="panel-body" style={{ display: 'flex', gap: 20, alignItems: 'center' }}>
@@ -28,6 +35,7 @@ export default function DraftScreen() {
           {isUser
             ? <b className="green">輪到你選擇了！</b>
             : <span className="muted">輪到 {league.teams[onClock]?.name}</span>}
+          <span className="scout-points" style={{ marginLeft: 'auto' }}>🔍 球探點數 {league.scout.points}</span>
         </div>
       </div>
       <div className="panel">
@@ -45,7 +53,7 @@ export default function DraftScreen() {
                   <td>{p.pos}</td>
                   <td className="num">{p.age}</td>
                   <td><OvrBadge v={ovr(p)} /></td>
-                  <td className="num"><b className="gold">{p.pot}</b></td>
+                  <td className="num"><PotFog p={p} withButton /></td>
                   <td>
                     <button className="primary" style={{ padding: '2px 14px' }} disabled={!isUser} onClick={() => userDraftPick(p)}>
                       指名

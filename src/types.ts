@@ -167,4 +167,6 @@ export interface League {
   allStar: AllStarState | null
   history: YearRecord[]
   hallOfFame: HofEntry[]
+  /** 球探部：點數與每位球員的情報等級（0~3，僅使用者球團視角） */
+  scout: { points: number; levels: Record<number, number> }
 }

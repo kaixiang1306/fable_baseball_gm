@@ -1,4 +1,6 @@
-import type { Team } from '../types'
+import type { Player, Team } from '../types'
+import { useStore } from '../store'
+import { canScout, potEstimate, SCOUT_LEVEL_LABELS } from '../engine/scouting'
 
 export function Logo({ team, size = 44 }: { team: Pick<Team, 'c1' | 'c2' | 'short'>; size?: number }) {
   return (
@@ -52,4 +54,30 @@ export function Gauge({ value, label, size = 84 }: { value: number; label: strin
 export function OvrBadge({ v }: { v: number }) {
   const cls = v >= 75 ? 's' : v >= 65 ? 'a' : v >= 55 ? 'b' : ''
   return <span className={`ovr-badge ${cls}`}>{v}</span>
+}
+
+/** 潛力迷霧顯示：依球探情報等級顯示範圍或精確值，可附考察按鈕 */
+export function PotFog({ p, withButton = false }: { p: Player; withButton?: boolean }) {
+  const league = useStore(s => s.league)
+  const scout = useStore(s => s.scout)
+  if (!league) return null
+  const e = potEstimate(league, p)
+  const scoutable = canScout(league, p)
+  return (
+    <span style={{ whiteSpace: 'nowrap' }} title={`球探情報：${SCOUT_LEVEL_LABELS[e.level]}`}>
+      {e.exact
+        ? <b className="gold">{p.pot}</b>
+        : <span style={{ color: e.level >= 2 ? 'var(--gold)' : e.level >= 1 ? 'var(--txt)' : 'var(--txt-dim)' }}>{e.lo}~{e.hi}</span>}
+      {withButton && !e.exact && (
+        <button
+          className="scout-btn"
+          disabled={!scoutable}
+          title={scoutable ? '派遣球探考察（消耗 1 點）' : '球探點數不足'}
+          onClick={ev => { ev.stopPropagation(); scout(p) }}
+        >
+          🔍
+        </button>
+      )}
+    </span>
+  )
 }

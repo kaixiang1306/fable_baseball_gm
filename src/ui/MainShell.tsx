@@ -49,6 +49,7 @@ export default function MainShell() {
         <span className="meta">
           <span>戰績 <b>{w}勝 {l}敗 {t}和</b></span>
           <span>士氣 <b>{team.morale}</b></span>
+          <span className="scout-points" title="派遣球探考察球員潛力用，每 5 天累積 1 點、選秀前加發 6 點">🔍 {league.scout.points}</span>
           <span>年薪資 <b>{fmtMoney(teamPayroll(league, team.id))}</b> / {fmtMoney(team.budget)}</span>
           <span><b>{dateLabel}</b> {halfLabel}</span>
           <button className="ghost" style={{ padding: '2px 10px', fontSize: 12 }} onClick={exportSave} title="下載聯盟存檔 JSON，可分享給其他玩家匯入">匯出存檔</button>

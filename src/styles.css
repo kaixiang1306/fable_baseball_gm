@@ -273,6 +273,14 @@ table.data tr.hl td { background: rgba(214, 54, 47, 0.12); }
 .rating-row .rlabel { width: 34px; color: var(--txt-dim); flex: none; }
 .rating-row .rbar { flex: 1; height: 9px; background: #11161d; border-radius: 5px; overflow: hidden; }
 .rating-row .rbar div { height: 100%; border-radius: 5px; }
+.scout-btn {
+  padding: 0 5px; font-size: 11px; margin-left: 5px; border-radius: 3px;
+  background: var(--bg2); vertical-align: middle;
+}
+.scout-points {
+  background: rgba(232, 185, 60, 0.12); border: 1px solid var(--gold); color: var(--gold);
+  border-radius: 4px; padding: 2px 10px; font-size: 12px; font-weight: 700; white-space: nowrap;
+}
 .pname-link { cursor: pointer; }
 .pname-link:hover { color: var(--red2); text-decoration: underline; }
 .hof-card {

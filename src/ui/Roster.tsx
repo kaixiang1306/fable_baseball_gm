@@ -7,7 +7,7 @@ import { extensionAsk, MAX_NEGO_FAILS, type NegoResult } from '../engine/contrac
 import { posFactor } from '../engine/positions'
 import type { Pos } from '../types'
 import { avg, era, ip } from '../engine/util'
-import { Logo, OvrBadge } from './bits'
+import { Logo, OvrBadge, PotFog } from './bits'
 
 function PName({ p }: { p: Player }) {
   const setViewPlayer = useStore(s => s.setViewPlayer)
@@ -302,7 +302,7 @@ export default function Roster() {
                   <td>{p.pos}</td>
                   <td className="num">{p.age}</td>
                   <td><OvrBadge v={ovr(p)} /></td>
-                  <td className="num">{p.pot}</td>
+                  <td className="num"><PotFog p={p} withButton /></td>
                   <td className="num"><MoraleDot v={p.morale} /></td>
                   <td className="num muted">
                     {p.isP

@@ -4,7 +4,7 @@ import { ovr } from '../engine/playerGen'
 import { faAsk } from '../engine/offseason'
 import { teamPayroll } from '../engine/league'
 import { fmtMoney } from '../engine/util'
-import { OvrBadge } from './bits'
+import { OvrBadge, PotFog } from './bits'
 
 export default function FAScreen() {
   const league = useStore(s => s.league)!
@@ -32,7 +32,8 @@ export default function FAScreen() {
         <button className={filter === 'all' ? 'primary' : ''} onClick={() => setFilter('all')}>全部</button>
         <button className={filter === 'bat' ? 'primary' : ''} onClick={() => setFilter('bat')}>野手</button>
         <button className={filter === 'pit' ? 'primary' : ''} onClick={() => setFilter('pit')}>投手</button>
-        <button className="primary" style={{ marginLeft: 'auto' }} onClick={userFinishFA}>完成簽約，進入選秀 ▶</button>
+        <span className="scout-points" style={{ alignSelf: 'center', marginLeft: 'auto' }}>🔍 球探點數 {league.scout.points}</span>
+        <button className="primary" onClick={userFinishFA}>完成簽約，進入選秀 ▶</button>
       </div>
       <div className="panel">
         <div className="panel-head">自由球員（{pool.length} 人）</div>
@@ -51,7 +52,7 @@ export default function FAScreen() {
                     <td>{p.pos}</td>
                     <td className="num">{p.age}</td>
                     <td><OvrBadge v={ovr(p)} /></td>
-                    <td className="num">{p.pot}</td>
+                    <td className="num"><PotFog p={p} withButton /></td>
                     <td className="num">{ask.salary} 萬</td>
                     <td className="num">{ask.years} 年</td>
                     <td>

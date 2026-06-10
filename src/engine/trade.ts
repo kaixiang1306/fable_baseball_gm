@@ -2,11 +2,13 @@ import type { League, Player } from '../types'
 import { fairSalary, ovr } from './playerGen'
 import { teamPayroll } from './league'
 import { TRADE_DEADLINE_DAY } from './league'
+import { potEstimate } from './scouting'
 import { clamp } from './util'
 
-/** 球員交易價值 */
-export function tradeValue(p: Player): number {
+/** 球員交易價值（potOverride 供「使用者視角」以球探估計值計算） */
+export function tradeValue(p: Player, potOverride?: number): number {
   const o = ovr(p)
+  const pot = potOverride ?? p.pot
   let v = Math.pow(o, 2.3) / 120
   // 年齡
   if (p.age <= 24) v *= 1.2
@@ -15,7 +17,7 @@ export function tradeValue(p: Player): number {
   else if (p.age <= 34) v *= 0.7
   else v *= 0.5
   // 潛力
-  v *= 1 + Math.max(0, p.pot - o) / 90
+  v *= 1 + Math.max(0, pot - o) / 90
   // 薪資負擔
   v -= Math.max(0, p.salary - fairSalary(p)) * 0.35
   // 洋將約短，價值略低
@@ -24,6 +26,12 @@ export function tradeValue(p: Player): number {
   if (p.injuryDays > 0) v *= clamp(1 - p.injuryDays / 120, 0.5, 1)
   v *= 1 + (p.morale - 55) / 400
   return Math.max(1, v)
+}
+
+/** 使用者視角的交易價值：潛力以球探估計中位數計（避免洩漏真實潛力） */
+export function tradeValuePerceived(L: League, p: Player): number {
+  const e = potEstimate(L, p)
+  return tradeValue(p, Math.round((e.lo + e.hi) / 2))
 }
 
 export interface TradeVerdict { accept: boolean; reason: string; diff: number }

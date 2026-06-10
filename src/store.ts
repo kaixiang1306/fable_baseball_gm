@@ -8,6 +8,7 @@ import { allStarLiveGame, applyAllStarResult } from './engine/allstar'
 import { startOffseason, finishFA, signFA, draftPickPlayer, runAIDraftPicks } from './engine/offseason'
 import { evaluateTrade, executeTrade, type TradeVerdict } from './engine/trade'
 import { offerExtension, type NegoResult } from './engine/contracts'
+import { scoutPlayer } from './engine/scouting'
 
 const SAVE_KEY = 'fable-gm-save-v3'
 
@@ -23,6 +24,7 @@ function migrateLeague(L: League): League {
   L.history ??= []
   L.hallOfFame ??= []
   L.allStar ??= null
+  L.scout ??= { points: 8, levels: {} }
   for (const t of L.teams) {
     t.farmRec ??= { w: 0, l: 0, t: 0 }
   }
@@ -69,6 +71,7 @@ interface Store {
 
   proposeTrade: (otherTeam: number, give: Player[], get: Player[]) => TradeVerdict
   negotiate: (p: Player, salary: number, years: number) => NegoResult
+  scout: (p: Player) => void
   goOffseason: () => void
   userSignFA: (p: Player) => void
   userFinishFA: () => void
@@ -227,6 +230,14 @@ export const useStore = create<Store>((set, get) => ({
     save(L)
     set(s => ({ tick: s.tick + 1 }))
     return result
+  },
+
+  scout: (p) => {
+    const L = get().league!
+    if (scoutPlayer(L, p)) {
+      save(L)
+      set(s => ({ tick: s.tick + 1 }))
+    }
   },
 
   goOffseason: () => {
